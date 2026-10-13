@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-900 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NaviAgent | Automatización Documental de Cambios de Tripulación</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="min-h-screen flex flex-col font-['Inter',sans-serif] bg-slate-950 text-slate-100 antialiased selection:bg-blue-600 selection:text-white">
+
+  <!-- TOP NAVBAR -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <i class="fa-solid fa-anchor text-white text-lg"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="font-bold text-lg tracking-tight text-white">NaviAgent</span>
+            <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">v1.0 Local</span>
+          </div>
+          <p class="text-xs text-slate-400">Automatización Documental Marítima • LOI & Anexo IX</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <!-- Indicador de Red Local (LAN) -->
+        <div id="lanStatusBadge" class="hidden md:inline-flex items-center space-x-1.5 bg-blue-500/10 text-blue-300 px-3 py-1 rounded-full text-xs font-mono border border-blue-500/20" title="Acceso desde cualquier equipo de la red local">
+          <i class="fa-solid fa-network-wired text-blue-400"></i>
+          <span id="lanIpLabel">LAN: 192.168.4.30:4000</span>
+        </div>
+
+        <!-- Indicador de Unidad de Red F:\ -->
+        <div id="storageStatusBadge" class="inline-flex items-center space-x-2 bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-xs font-medium border border-emerald-500/20" title="Unidad compartida F:\Letters of Invitation LOIs">
+          <span id="storageDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="storageLabel">Unidad F:\ Conectada</span>
+        </div>
+
+        <button id="btnOpenFolder" class="hidden sm:inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="Abrir carpeta Documentos_Generados en unidad F:\">
+          <i class="fa-regular fa-folder-open text-amber-400"></i>
+          <span>Abrir Carpeta F:\</span>
+        </button>
+
+        <button id="btnToggleSettings" class="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+          <i class="fa-solid fa-key text-blue-400"></i>
+          <span id="apiKeyStatusLabel">Gemini AI</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- BANNER DE ALERTA: UNIDAD DE RED F:\ DESCONECTADA O SIN PERMISOS -->
+  <div id="storageAlertBanner" class="hidden bg-rose-950/90 border-b border-rose-600/60 px-4 py-2 text-rose-100 backdrop-blur z-40">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
+      <div class="flex items-center space-x-2">
+        <i class="fa-solid fa-triangle-exclamation text-amber-400 text-base"></i>
+        <span id="storageAlertMessage" class="font-medium">Aviso: No se puede acceder a la unidad compartida F:\Letters of Invitation LOIs\</span>
+      </div>
+      <button id="btnRetryStorage" class="px-3 py-1 bg-rose-800 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition shadow">
+        <i class="fa-solid fa-rotate-right mr-1"></i> Reintentar Conexión
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIGURACIÓN API KEY -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-200">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-base font-semibold text-white flex items-center space-x-2">
+          <i class="fa-solid fa-robot text-blue-400"></i>
+          <span>Configuración de Gemini AI</span>
+        </h3>
+        <button id="btnCloseSettings" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <p class="text-xs text-slate-400 mb-4">
+        Puedes ingresar tu <code>GEMINI_API_KEY</code> para activar la extracción neuronal con Gemini 3.7 Flash. Si no se introduce, el sistema utilizará de forma automática su potente <strong>motor heurístico y de expresiones regulares</strong>.
+      </p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">Gemini API Key</label>
+          <input type="password" id="inputApiKey" placeholder="AIzaSy..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500">
+        </div>
+      </div>
+      <div class="mt-6 flex justify-end space-x-3">
+        <button id="btnSaveApiKey" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition shadow-lg shadow-blue-600/30">
+          Guardar Configuración
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+
+    <!-- HERO BANNER -->
+    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border border-blue-900/40 p-6 sm:p-8 shadow-xl">
+      <div class="absolute -right-10 -bottom-10 opacity-10 text-blue-400 pointer-events-none">
+        <i class="fa-solid fa-ship text-[240px]"></i>
+      </div>
+      <div class="relative z-10 max-w-3xl">
+        <div class="inline-flex items-center space-x-2 px-2.5 py-1 rounded-md bg-blue-500/20 text-blue-300 text-xs font-medium mb-3 border border-blue-500/30">
+          <i class="fa-solid fa-bolt text-xs text-amber-400"></i>
+          <span>Sistema Agéntico de 3 Fases</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+          Procesador Inteligente de Cambios de Tripulación
+        </h1>
+        <p class="mt-2 text-sm text-slate-300 leading-relaxed">
+          Pega el correo electrónico con los datos de vuelo y tripulación. El <strong>ParserAgent</strong> extraerá la información, podrás verificar y editar los campos en vivo, y los agentes <strong>LOIAgent</strong> y <strong>AnexoIXAgent</strong> generarán tus documentos oficiales Word (.docx) preservando intacto el diseño y formato institucional.
+        </p>
+      </div>
+    </div>
+
+    <!-- NOTIFICACIONES TOAST -->
+    <div id="toastContainer" class="fixed top-20 right-6 z-50 space-y-2 pointer-events-none"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+      <!-- COLUMNA IZQUIERDA: ENTRADA DE CORREO -->
+      <div class="lg:col-span-5 space-y-6">
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center space-x-2">
+              <span class="w-6 h-6 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center text-xs font-bold">1</span>
+              <h2 class="font-bold text-sm text-white uppercase tracking-wider">Cuerpo del E-mail</h2>
+            </div>
+            <span class="text-xs text-slate-400 font-mono" id="charCounter">0 caracteres</span>
+          </div>
+
+          <!-- Selector de Ejemplos Rápidos -->
+          <div class="mb-3">
+            <label class="block text-xs font-medium text-slate-400 mb-1.5">
+              <i class="fa-regular fa-lightbulb text-amber-400 mr-1"></i> Cargar ejemplos de prueba:
+            </label>
+            <div class="grid grid-cols-1 gap-1.5">
+              <button class="btn-sample text-left text-xs px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-750 hover:border-slate-600 rounded-lg text-slate-300 border border-slate-700/60 transition truncate" data-sample="1">
+                <i class="fa-solid fa-file-lines text-blue-400 mr-1"></i> <strong>Ejemplo 1:</strong> M.T. Luca Ievoli (Italian Flag - Tarragona)
+              </button>
+              <button class="btn-sample text-left text-xs px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-750 hover:border-slate-600 rounded-lg text-slate-300 border border-slate-700/60 transition truncate" data-sample="2">
+                <i class="fa-solid fa-plane-departure text-cyan-400 mr-1"></i> <strong>Ejemplo 2:</strong> Capitán con Escalas (Filipinas - MAD/LPA)
+              </button>
+              <button class="btn-sample text-left text-xs px-2.5 py-1.5 bg-slate-800/80 hover:bg-slate-750 hover:border-slate-600 rounded-lg text-slate-300 border border-slate-700/60 transition truncate" data-sample="3">
+                <i class="fa-solid fa-user-shield text-emerald-400 mr-1"></i> <strong>Ejemplo 3:</strong> Marinero de Guardia (España)
+              </button>
+            </div>
+          </div>
+
+          <!-- Textarea principal -->
+          <div class="relative">
+            <textarea id="emailInput" rows="14" placeholder="Pega aquí el texto completo del e-mail recibido con los datos del tripulante y los vuelos..." class="w-full bg-slate-950/80 border border-slate-800 focus:border-blue-500 rounded-xl p-3.5 text-xs sm:text-sm font-mono text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 transition leading-relaxed resize-y"></textarea>
+          </div>
+
+          <!-- Botón de Análisis (ParserAgent) -->
+          <div class="mt-4 flex items-center space-x-3">
+            <button id="btnParse" class="flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold rounded-xl text-sm transition shadow-lg shadow-blue-600/30 flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
+              <span id="btnParseText">Parsear Datos con ParserAgent</span>
+              <span id="parseSpinner" class="hidden">
+                <i class="fa-solid fa-circle-notch fa-spin"></i>
+              </span>
+            </button>
+            <button id="btnClear" title="Limpiar texto" class="p-3 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl transition border border-slate-700">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+
+          <!-- Metodo y Estado del Parser -->
+          <div id="parserStatusBadge" class="mt-3 hidden items-center justify-between text-xs px-3 py-2 rounded-xl bg-slate-800/80 border border-slate-700">
+            <span class="text-slate-400">Motor de extracción:</span>
+            <span id="parserMethodName" class="font-semibold text-blue-400">Heurístico / Regex</span>
+          </div>
+        </div>
+
+        <!-- HISTORIAL DE DOCUMENTOS EN /DATOS -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center space-x-2">
+              <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i>
+              <h2 class="font-bold text-xs text-white uppercase tracking-wider">Documentos Recientes en /datos</h2>
+            </div>
+            <button id="btnRefreshDocs" class="text-xs text-slate-400 hover:text-white transition">
+              <i class="fa-solid fa-arrows-rotate"></i>
+            </button>
+          </div>
+          <div id="recentDocsList" class="space-y-2 max-h-56 overflow-y-auto pr-1 text-xs">
+            <p class="text-slate-500 italic py-2 text-center">No hay documentos generados aún.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- COLUMNA DERECHA: PANEL DE VERIFICACIÓN, EDICIÓN Y GENERACIÓN -->
+      <div class="lg:col-span-7 space-y-6">
+
+        <!-- PANEL DE VERIFICACIÓN / RESUMEN EDITABLE -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur relative">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-800">
+            <div class="flex items-center space-x-2">
+              <span class="w-6 h-6 rounded-lg bg-emerald-600/20 text-emerald-400 flex items-center justify-center text-xs font-bold">2</span>
+              <h2 class="font-bold text-sm text-white uppercase tracking-wider">Verificación y Edición de Datos</h2>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span id="dataStatusBadge" class="px-2.5 py-0.5 text-xs font-medium rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                Esperando parseo
+              </span>
+            </div>
+          </div>
+
+          <!-- BARRA DE OPERATIVA: BUQUE Y FECHAS SIEMPRE VISIBLES -->
+          <div class="mb-4 p-3 bg-slate-950/80 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-inner">
+            <div class="flex items-center space-x-2 text-xs">
+              <i class="fa-solid fa-ship text-blue-400"></i>
+              <span class="text-slate-400">Buque:</span>
+              <span id="quick_vessel_badge" class="font-bold text-slate-200">Sin asignar</span>
+            </div>
+            <div class="flex items-center space-x-3 text-xs font-mono">
+              <div class="flex items-center space-x-1.5 bg-blue-950/50 px-2.5 py-1 rounded-lg border border-blue-800/60">
+                <i class="fa-regular fa-calendar-check text-blue-400"></i>
+                <span class="text-slate-400 text-[11px]">Embarque:</span>
+                <span id="quick_embarque_badge" class="font-bold text-blue-300">--/--/----</span>
+              </div>
+              <div class="flex items-center space-x-1.5 bg-indigo-950/50 px-2.5 py-1 rounded-lg border border-indigo-800/60">
+                <i class="fa-regular fa-calendar-plus text-indigo-400"></i>
+                <span class="text-slate-400 text-[11px]">Salida (+1 día):</span>
+                <span id="quick_desembarque_badge" class="font-bold text-indigo-300">--/--/----</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pestañas internas -->
+          <div class="flex border-b border-slate-800 space-x-4 mb-4 text-xs font-medium">
+            <button class="tab-btn pb-2 text-blue-400 border-b-2 border-blue-500 font-semibold flex items-center space-x-1.5" data-tab="tab-personal">
+              <i class="fa-regular fa-user"></i>
+              <span>Datos Personales</span>
+            </button>
+            <button class="tab-btn pb-2 text-slate-400 hover:text-slate-200 flex items-center space-x-1.5" data-tab="tab-vessel">
+              <i class="fa-solid fa-ship"></i>
+              <span>Buque y Operativa</span>
+            </button>
+            <button class="tab-btn pb-2 text-slate-400 hover:text-slate-200 flex items-center space-x-1.5" data-tab="tab-flights">
+              <i class="fa-solid fa-plane"></i>
+              <span>Vuelos e Itinerario (<span id="flightCountBadge">0</span>)</span>
+            </button>
+          </div>
+
+          <form id="crewDataForm" class="space-y-4">
+
+            <!-- TAB 1: DATOS PERSONALES -->
+            <div id="tab-personal" class="tab-content space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Nombre</label>
+                  <input type="text" id="field_nombre" class="form-input uppercase" placeholder="IVAN">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Apellidos</label>
+                  <input type="text" id="field_apellidos" class="form-input uppercase" placeholder="PETROV">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Rango / Cargo a Bordo</label>
+                  <input type="text" id="field_rango_cargo" class="form-input uppercase" placeholder="CHIEF ENGINEER">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Nacionalidad</label>
+                  <input type="text" id="field_nacionalidad" class="form-input" placeholder="UCRANIANA">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Fecha Nacimiento</label>
+                  <input type="text" id="field_fecha_nacimiento" class="form-input" placeholder="14/05/1982">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Lugar Nacimiento</label>
+                  <input type="text" id="field_lugar_nacimiento" class="form-input" placeholder="ODESA">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+                  <div class="flex items-center justify-between pb-1 border-b border-slate-800/80">
+                    <span class="text-xs font-bold text-slate-200"><i class="fa-regular fa-id-card text-blue-400 mr-1.5"></i> Pasaporte</span>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-medium text-slate-400 mb-1">Número de Pasaporte</label>
+                    <input type="text" id="field_pasaporte" class="form-input font-mono" placeholder="EP1234567">
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="block text-[11px] font-medium text-slate-400 mb-1">Fecha de Expedición</label>
+                      <input type="text" id="field_fecha_expedicion_pasaporte" class="form-input font-mono" placeholder="15/10/2020">
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-medium text-slate-400 mb-1">Fecha de Caducidad</label>
+                      <input type="text" id="field_validez_pasaporte" class="form-input font-mono" placeholder="20/10/2030">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-2.5">
+                  <div class="flex items-center justify-between pb-1 border-b border-slate-800/80">
+                    <span class="text-xs font-bold text-slate-200"><i class="fa-solid fa-book-bookmark text-emerald-400 mr-1.5"></i> Libreta Marítima (CDC)</span>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-medium text-slate-400 mb-1">Número Seaman's Book</label>
+                    <input type="text" id="field_libreta_maritima" class="form-input font-mono" placeholder="SB-987654">
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="block text-[11px] font-medium text-slate-400 mb-1">Fecha de Expedición</label>
+                      <input type="text" id="field_fecha_expedicion_libreta" class="form-input font-mono" placeholder="20/12/2019">
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-medium text-slate-400 mb-1">Fecha de Caducidad</label>
+                      <input type="text" id="field_validez_libreta" class="form-input font-mono" placeholder="15/12/2029">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 2: BUQUE Y OPERATIVA -->
+            <div id="tab-vessel" class="tab-content space-y-3 hidden">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Nombre del Buque</label>
+                  <input type="text" id="field_buque" class="form-input" placeholder="M.T. Luca Ievoli">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Número IMO</label>
+                  <input type="text" id="field_imo" class="form-input font-mono" placeholder="9250086">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Bandera / Pabellón</label>
+                  <input type="text" id="field_bandera" class="form-input" placeholder="ITALIANA">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-400 mb-1">Puerto de Embarque</label>
+                  <input type="text" id="field_puerto_embarque" class="form-input" placeholder="TARRAGONA">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1">
+                  <label class="block text-[11px] font-bold text-blue-400 mb-1">
+                    <i class="fa-regular fa-calendar-check mr-1"></i> Fecha de Embarque (DD/MM/YYYY)
+                  </label>
+                  <input type="text" id="field_fecha_embarque" class="form-input font-mono text-xs" placeholder="25/08/2026">
+                </div>
+                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1">
+                  <label class="block text-[11px] font-bold text-indigo-400 mb-1">
+                    <i class="fa-regular fa-calendar-plus mr-1"></i> Día Siguiente / Fecha Salida (DD/MM/YYYY)
+                  </label>
+                  <input type="text" id="field_fecha_desembarque" class="form-input font-mono text-xs" placeholder="26/08/2026">
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 3: VUELOS E ITINERARIO -->
+            <div id="tab-flights" class="tab-content space-y-3 hidden">
+              <div class="flex items-center justify-between pb-1 border-b border-slate-800">
+                <span class="text-xs font-semibold text-slate-300">
+                  <i class="fa-solid fa-plane-departure text-blue-400 mr-1.5"></i> Itinerario de Vuelos (2 Tramos)
+                </span>
+                <span class="text-[11px] px-2 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-800/60 font-mono">
+                  2 Tramos Conectados
+                </span>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Resumen del Itinerario</label>
+                <input type="text" id="field_itinerario_resumen" class="form-input text-xs font-mono" placeholder="QR557 BOM-DOH // QR149 DOH-BCN">
+              </div>
+
+              <div id="flightsContainer" class="space-y-3 pt-1">
+                <!-- Se inyectan dinámicamente los 2 tramos con JS -->
+              </div>
+            </div>
+
+          </form>
+
+          <!-- ACCIONES DE GENERACIÓN -->
+          <div class="mt-6 pt-5 border-t border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                <span class="w-5 h-5 inline-flex items-center justify-center rounded-full bg-blue-600/20 text-blue-400 font-bold mr-1">3</span>
+                Generación de Documentos Word (.docx)
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <!-- Botón 1: LOI -->
+              <button id="btnGenLOI" class="py-3 px-3 bg-slate-800 hover:bg-slate-750 hover:border-blue-500/50 border border-slate-700 text-slate-100 font-semibold rounded-xl text-xs sm:text-sm transition flex flex-col items-center justify-center space-y-1 group">
+                <div class="flex items-center space-x-1.5 text-blue-400 group-hover:text-blue-300">
+                  <i class="fa-solid fa-envelope-open-text text-sm"></i>
+                  <span>Generar LOI</span>
+                </div>
+                <span class="text-[10px] text-slate-400 font-normal">Letter of Invitation</span>
+              </button>
+
+              <!-- Botón 2: Anexo IX -->
+              <button id="btnGenAnexo" class="py-3 px-3 bg-slate-800 hover:bg-slate-750 hover:border-emerald-500/50 border border-slate-700 text-slate-100 font-semibold rounded-xl text-xs sm:text-sm transition flex flex-col items-center justify-center space-y-1 group">
+                <div class="flex items-center space-x-1.5 text-emerald-400 group-hover:text-emerald-300">
+                  <i class="fa-solid fa-passport text-sm"></i>
+                  <span>Generar Anexo IX</span>
+                </div>
+                <span class="text-[10px] text-slate-400 font-normal">Visado en Frontera</span>
+              </button>
+
+              <!-- Botón 3: Ambos -->
+              <button id="btnGenBoth" class="py-3 px-3 bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white font-semibold rounded-xl text-xs sm:text-sm transition shadow-lg shadow-blue-900/30 flex flex-col items-center justify-center space-y-1">
+                <div class="flex items-center space-x-1.5">
+                  <i class="fa-solid fa-bolt text-amber-300 text-sm"></i>
+                  <span>Generar Ambos</span>
+                </div>
+                <span class="text-[10px] text-blue-100 font-normal">LOI + Anexo IX</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- RESULTADO / DESCARGAS INMEDIATAS -->
+          <div id="generationResultBox" class="mt-5 p-4 rounded-xl bg-slate-950/80 border border-blue-500/30 hidden space-y-3">
+            <div class="flex items-center space-x-2 text-emerald-400 text-sm font-semibold">
+              <i class="fa-solid fa-circle-check text-base"></i>
+              <span id="resultSuccessTitle">¡Documentos generados exitosamente!</span>
+            </div>
+            <div id="downloadLinksList" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <!-- Enlaces dinámicos -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-slate-800 bg-slate-950 py-4 text-center text-xs text-slate-500">
+    <p>NaviAgent • Sistema Especializado de Agentes para Logística y Gestión Documental Marítima • Servido en localhost:4000</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
